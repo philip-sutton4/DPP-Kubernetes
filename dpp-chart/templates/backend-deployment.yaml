@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dpp-chart.fullname" . }}-backend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dpp-chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  replicas: {{ .Values.backend.replicas }}
+  selector:
+    matchLabels:
+      {{- include "dpp-chart.selectorLabels" (dict "component" "backend" "context" .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dpp-chart.labels" . | nindent 8 }}
+        {{- include "dpp-chart.selectorLabels" (dict "component" "backend" "context" .) | nindent 8 }}
+    spec:
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.backend.port }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.backend.metricsPort }}
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.backend.nodeEnv | quote }}
+            - name: CONFIG_PATH
+              value: {{ .Values.backend.configPath | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 5
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/config.prod.json
+              subPath: config.prod.json
+              readOnly: true
+            - name: html-storage
+              mountPath: /app/html
+            - name: svg-storage
+              mountPath: /app/codes
+
+        - name: product-viewer
+          image: {{ .Values.productViewer.image.repository }}
+          imagePullPolicy: {{ .Values.productViewer.image.pullPolicy }}
+          ports:
+            - name: product
+              containerPort: {{ .Values.productViewer.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: html-storage
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+
+      volumes:
+        - name: config
+          secret:
+            secretName: {{ include "dpp-chart.fullname" . }}-backend-config
+        - name: html-storage
+          persistentVolumeClaim:
+            claimName: {{ include "dpp-chart.fullname" . }}-html-storage
+        - name: svg-storage
+          persistentVolumeClaim:
+            claimName: {{ include "dpp-chart.fullname" . }}-svg-storage
+        - name: nginx-config
+          configMap:
+            name: {{ include "dpp-chart.fullname" . }}-product-viewer-config

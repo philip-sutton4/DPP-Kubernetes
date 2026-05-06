@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "dpp-chart.fullname" . }}-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dpp-chart.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.ingressClassName }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ include "dpp-chart.fullname" . }}-backend
+                port:
+                  number: {{ .Values.backend.port }}
+          - path: /product/()(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ include "dpp-chart.fullname" . }}-backend
+                port:
+                  number: {{ .Values.productViewer.port }}
+          - path: /()(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ include "dpp-chart.fullname" . }}-frontend
+                port:
+                  number: {{ .Values.frontend.port }}

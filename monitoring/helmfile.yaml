@@ -1,0 +1,35 @@
+repositories:
+  - name: prometheus-community
+    url: https://prometheus-community.github.io/helm-charts
+  - name: grafana
+    url: https://grafana.github.io/helm-charts
+
+releases:
+  - name: prometheus-crds
+    namespace: monitoring
+    chart: prometheus-community/prometheus-operator-crds
+    createNamespace: true
+
+  - name: kube-prometheus-stack
+    namespace: monitoring
+    chart: prometheus-community/kube-prometheus-stack
+    version: "67.0.0"
+    needs:
+      - monitoring/prometheus-crds
+    values:
+      - prometheus-stack/values.yaml
+
+  - name: grafana-config
+    namespace: monitoring
+    chart: ./grafana-config
+    needs:
+      - monitoring/kube-prometheus-stack
+
+  - name: tempo
+    namespace: monitoring
+    chart: grafana/tempo
+    version: "1.10.3"
+    needs:
+      - monitoring/prometheus-crds
+    values:
+      - ./tempo-values.yaml

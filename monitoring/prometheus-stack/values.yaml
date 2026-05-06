@@ -1,0 +1,39 @@
+grafana:
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: monitoring
+    datasources:
+      enabled: true
+      label: grafana_datasource
+      searchNamespace: monitoring
+  adminPassword: "admin"
+  persistence:
+    enabled: false
+  assertNoLeakedSecrets: false
+
+  grafana.ini:
+    server:
+      domain: grafana.dpp.local
+      root_url: "http://grafana.dpp.local"
+
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - grafana.dpp.local
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 10Gi

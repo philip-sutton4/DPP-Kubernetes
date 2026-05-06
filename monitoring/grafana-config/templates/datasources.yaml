@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  infinity-datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: mongodb-data-simulator
+        type: yesoreyeram-infinity-datasource
+        url: http://dpp-backend.dpp.svc.cluster.local:8080
+  tempo-datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        type: tempo
+        url: http://tempo.monitoring.svc.cluster.local:3100
+        access: proxy
+        jsonData:
+          httpMethod: GET
+          serviceMap:
+            datasourceUid: prometheus

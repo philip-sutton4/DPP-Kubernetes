@@ -1,0 +1,6 @@
+apiVersion: v2
+name: dpp-chart
+description: DPP application — backend, frontend, and nginx product-viewer sidecar
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

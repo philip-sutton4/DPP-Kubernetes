@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dpp-chart.fullname" . }}-backend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dpp-chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  selector:
+    {{- include "dpp-chart.selectorLabels" (dict "component" "backend" "context" .) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.backend.port }}
+      targetPort: http
+      protocol: TCP
+    - name: product-viewer
+      port: {{ .Values.productViewer.port }}
+      targetPort: product
+      protocol: TCP
+    - name: metrics
+      port: {{ .Values.backend.metricsPort }}
+      targetPort: metrics
+      protocol: TCP

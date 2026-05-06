@@ -1,0 +1,36 @@
+tempo:
+  metricsGenerator:
+    enabled: true
+    remoteWriteUrl: "http://dpp-monitoring-kube-prometheus.monitoring.svc.cluster.local:9090/api/v1/write"
+    processor:
+      serviceGraphs:
+        enabled: true
+      spanMetrics:
+        enabled: true
+  config:
+    overrides:
+      defaults:
+        metrics_generator:
+          processors:
+            - service-graphs
+            - span-metrics
+  retention: 24h
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+  receivers:
+    otlp:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4318
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+persistence:
+  enabled: true
+  size: 10Gi
+
+service:
+  type: ClusterIP
