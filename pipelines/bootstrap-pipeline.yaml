@@ -20,6 +20,10 @@ parameters:
     displayName: Email for Let's Encrypt
     type: string
     default: philip@sutton.pl
+  - name: serviceConnection
+    displayName: Azure Service Connection
+    type: string
+    default: dpp-ephemeral-dev
 
 stages:
   - stage: Bootstrap
@@ -31,7 +35,7 @@ stages:
           - task: AzureCLI@2
             displayName: Create resource group and deploy Bicep
             inputs:
-              azureSubscription: your-azure-service-connection
+              azureSubscription: dpp-ephemeral-dev
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
@@ -54,7 +58,7 @@ stages:
           - task: AzureCLI@2
             displayName: Install ingress-nginx
             inputs:
-              azureSubscription: your-azure-service-connection
+              azureSubscription: ${{ parameters.serviceConnection }}
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
@@ -76,7 +80,7 @@ stages:
           - task: AzureCLI@2
             displayName: Install cert-manager
             inputs:
-              azureSubscription: your-azure-service-connection
+              azureSubscription: ${{ parameters.serviceConnection }}
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
@@ -95,7 +99,7 @@ stages:
           - task: AzureCLI@2
             displayName: Apply ClusterIssuer
             inputs:
-              azureSubscription: your-azure-service-connection
+              azureSubscription: ${{ parameters.serviceConnection }}
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
@@ -110,7 +114,7 @@ stages:
           - task: AzureCLI@2
             displayName: Print ingress hostname
             inputs:
-              azureSubscription: your-azure-service-connection
+              azureSubscription: ${{ parameters.serviceConnection }}
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
