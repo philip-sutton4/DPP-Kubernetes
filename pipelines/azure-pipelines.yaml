@@ -1,0 +1,68 @@
+trigger: none
+
+resources:
+  pipelines:
+    - pipeline: dpp
+      source: dpp-pipeline
+      trigger:
+        branches:
+          include:
+            - main
+            - feature/*
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  - group: dpp-secrets
+  - name: branchName
+    value: $[ replace(resources.pipeline.dpp.sourceBranch, 'refs/heads/', '') ]
+  - name: safeNamespace
+    value: $[ replace(variables['branchName'], '/', '-') ]
+
+stages:
+  - stage: Deploy
+    jobs:
+      - job: HelmDeploy
+        steps:
+          - task: AzureCLI@2
+            displayName: Get kubeconfig and ingress hostname
+            inputs:
+              azureSubscription: azure-ephemeral-dev
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az aks get-credentials \
+                  --resource-group dpp-ephemeral-dev \
+                  --name dpp-aks
+
+                HOSTNAME=$(kubectl get svc ingress-nginx-controller \
+                  -n ingress-nginx \
+                  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+                echo "##vso[task.setvariable variable=ingressHostname]$HOSTNAME"
+
+          - script: |
+              kubectl create namespace $(safeNamespace) \
+                --dry-run=client -o yaml | kubectl apply -f -
+            displayName: Ensure namespace exists
+
+          - task: HelmDeploy@0
+            displayName: Helm upgrade dpp
+            inputs:
+              command: upgrade
+              chartType: filepath
+              chartPath: ./dpp-chart
+              releaseName: dpp-$(safeNamespace)
+              namespace: $(safeNamespace)
+              install: true
+              overrideValues: |
+                frontend.image.tag=$(safeNamespace)-latest
+                backend.image.tag=$(safeNamespace)-latest
+                ingress.baseDomain=$(ingressHostname)
+                backend.configJson=$(BACKEND_CONFIG_JSON)
+              valueFile: dpp-chart/values.yaml
+
+          - script: |
+              echo "==> Environment URL: https://$(safeNamespace).$(ingressHostname)"
+            displayName: Print environment URL

@@ -9,8 +9,12 @@ metadata:
     {{- toYaml .Values.ingress.annotations | nindent 4 }}
 spec:
   ingressClassName: {{ .Values.ingress.ingressClassName }}
+  tls:
+    - hosts:
+        - "{{ .Release.Namespace }}.{{ .Values.ingress.baseDomain }}"
+      secretName: "tls-{{ .Release.Namespace }}"
   rules:
-    - host: {{ .Values.ingress.host }}
+    - host: "{{ .Release.Namespace }}.{{ .Values.ingress.baseDomain }}"
       http:
         paths:
           - path: /api(/|$)(.*)

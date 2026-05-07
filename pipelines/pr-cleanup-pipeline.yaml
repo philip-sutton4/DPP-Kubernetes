@@ -1,0 +1,41 @@
+trigger: none
+
+resources:
+  pipelines:
+    - pipeline: dpp
+      source: dpp-pipeline
+      trigger:
+        branches:
+          include:
+            - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  branchName: $[ replace(resources.pipeline.dpp.sourceBranch, 'refs/heads/', '') ]
+  safeNamespace: $[ replace(variables['branchName'], '/', '-') ]
+
+stages:
+  - stage: Cleanup
+    condition: startsWith(variables['safeNamespace'], 'feature-')
+    jobs:
+      - job: DeleteNamespace
+        steps:
+          - task: AzureCLI@2
+            displayName: Get kubeconfig
+            inputs:
+              azureSubscription: your-azure-service-connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az aks get-credentials \
+                  --resource-group dpp-ephemeral-dev \
+                  --name dpp-aks
+
+          - script: |
+              helm uninstall dpp-$(safeNamespace) \
+                -n $(safeNamespace) --ignore-not-found
+              kubectl delete namespace $(safeNamespace) \
+                --ignore-not-found=true
+            displayName: Delete namespace and Helm release
