@@ -1,0 +1,37 @@
+trigger: none
+
+schedules:
+  - cron: "0 7 * * 1-5"
+    displayName: Start AKS
+    branches:
+      include:
+        - main
+    always: true
+
+  - cron: "0 19 * * 1-5"
+    displayName: Stop AKS
+    branches:
+      include:
+        - main
+    always: true
+
+variables:
+  action: $[ iif(eq(variables['Schedule.DisplayName'], 'Start AKS'), 'start', 'stop') ]
+
+stages:
+  - stage: ToggleAKS
+    pool:
+      vmImage: ubuntu-latest
+    jobs:
+      - job: Toggle
+        steps:
+          - task: AzureCLI@2
+            displayName: $(action) AKS cluster
+            inputs:
+              azureSubscription: your-azure-service-connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az aks $(action) \
+                  --resource-group dpp-ephemeral-dev \
+                  --name dpp-aks
