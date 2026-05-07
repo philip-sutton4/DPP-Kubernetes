@@ -35,7 +35,7 @@ stages:
           - task: AzureCLI@2
             displayName: Create resource group and deploy Bicep
             inputs:
-              azureSubscription: dpp-ephemeral-dev
+              azureSubscription: ${{ parameters.serviceConnection }}
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
