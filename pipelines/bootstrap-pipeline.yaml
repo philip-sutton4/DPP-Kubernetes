@@ -1,0 +1,137 @@
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+parameters:
+  - name: resourceGroup
+    displayName: Resource Group
+    type: string
+    default: dpp-ephemeral-dev
+  - name: location
+    displayName: Location
+    type: string
+    default: polandcentral
+  - name: clusterName
+    displayName: Cluster Name
+    type: string
+    default: dpp-aks
+  - name: certEmail
+    displayName: Email for Let's Encrypt
+    type: string
+    default: philip@sutton.pl
+
+stages:
+  - stage: Bootstrap
+    displayName: Bootstrap AKS cluster
+    jobs:
+      - job: Bootstrap
+        timeoutInMinutes: 30
+        steps:
+          - task: AzureCLI@2
+            displayName: Create resource group and deploy Bicep
+            inputs:
+              azureSubscription: your-azure-service-connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo "==> Creating resource group..."
+                az group create \
+                  --name ${{ parameters.resourceGroup }} \
+                  --location ${{ parameters.location }}
+
+                echo "==> Deploying AKS via Bicep..."
+                az deployment group create \
+                  --resource-group ${{ parameters.resourceGroup }} \
+                  --template-file infra/main.bicep \
+                  --parameters clusterName=${{ parameters.clusterName }}
+
+                echo "==> Getting credentials..."
+                az aks get-credentials \
+                  --resource-group ${{ parameters.resourceGroup }} \
+                  --name ${{ parameters.clusterName }}
+
+          - task: AzureCLI@2
+            displayName: Install ingress-nginx
+            inputs:
+              azureSubscription: your-azure-service-connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az aks get-credentials \
+                  --resource-group ${{ parameters.resourceGroup }} \
+                  --name ${{ parameters.clusterName }}
+
+                kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+
+                kubectl wait \
+                  --namespace ingress-nginx \
+                  --for=condition=ready pod \
+                  --selector=app.kubernetes.io/component=controller \
+                  --timeout=90s
+
+                kubectl rollout status deployment ingress-nginx-controller \
+                  -n ingress-nginx
+
+          - task: AzureCLI@2
+            displayName: Install cert-manager
+            inputs:
+              azureSubscription: your-azure-service-connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az aks get-credentials \
+                  --resource-group ${{ parameters.resourceGroup }} \
+                  --name ${{ parameters.clusterName }}
+
+                kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+
+                kubectl wait \
+                  --namespace cert-manager \
+                  --for=condition=ready pod \
+                  --selector=app.kubernetes.io/instance=cert-manager \
+                  --timeout=120s
+
+          - task: AzureCLI@2
+            displayName: Apply ClusterIssuer
+            inputs:
+              azureSubscription: your-azure-service-connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az aks get-credentials \
+                  --resource-group ${{ parameters.resourceGroup }} \
+                  --name ${{ parameters.clusterName }}
+
+                # Inject the email parameter into the ClusterIssuer
+                sed 's/your@email.com/${{ parameters.certEmail }}/' \
+                  cert-manager/cluster-issuer.yaml | kubectl apply -f -
+
+          - task: AzureCLI@2
+            displayName: Print ingress hostname
+            inputs:
+              azureSubscription: your-azure-service-connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az aks get-credentials \
+                  --resource-group ${{ parameters.resourceGroup }} \
+                  --name ${{ parameters.clusterName }}
+
+                echo "==> Waiting for ingress hostname..."
+                until kubectl get svc ingress-nginx-controller \
+                  -n ingress-nginx \
+                  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' \
+                  2>/dev/null | grep -q .; do
+                  echo "Waiting..."
+                  sleep 5
+                done
+
+                HOSTNAME=$(kubectl get svc ingress-nginx-controller \
+                  -n ingress-nginx \
+                  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+                echo ""
+                echo "==> Bootstrap complete."
+                echo "    Ingress hostname: $HOSTNAME"
+                echo "    Environments will be at: https://<namespace>.$HOSTNAME"
