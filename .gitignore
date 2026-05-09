@@ -1,2 +1,3 @@
 secrets.yaml
 ephemeral-dev
+dpp-chart/templates/backend-prometheus-scrape.yaml
