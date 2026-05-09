@@ -15,34 +15,38 @@ pool:
 
 variables:
   - group: dpp-secrets
-  - name: safeNamespacee
-    value: $[ replace(replace(variables['resources.pipeline.dpp.sourceBranch'], 'refs/heads/', ''), '/', '-') ]
 
 stages:
   - stage: Deploy
+    pool:
+      vmImage: ubuntu-latest
     jobs:
       - job: HelmDeploy
         steps:
+          - script: |
+              SOURCE_BRANCH="$(resources.pipeline.dpp.sourceBranch)"
+              SAFE_NAMESPACE=$(echo "$SOURCE_BRANCH" | sed 's|refs/heads/||' | sed 's|/|-|g')
+              echo "==> Source branch: $SOURCE_BRANCH"
+              echo "==> Safe namespace: $SAFE_NAMESPACE"
+              echo "##vso[task.setvariable variable=safeNamespace]$SAFE_NAMESPACE"
+            displayName: Compute namespace from branch
+
+          - script: |
+              echo "safeNamespace is: $(safeNamespace)"
+            displayName: Verify namespace variable
+
           - task: AzureCLI@2
-            displayName: Get kubeconfig and ingress hostname
+            displayName: Get kubeconfig
             inputs:
               azureSubscription: azure-ephemeral-dev
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
                 az aks get-credentials \
-                  --resource-group dpp-ephemeral-dev \
-                  --name dpp-aks
+                  --resource-group dpp-rg \
+                  --name dpp-aks \
+                  --overwrite-existing
 
-                HOSTNAME=$(kubectl get svc ingress-nginx-controller \
-                  -n ingress-nginx \
-                  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-
-                echo "##vso[task.setvariable variable=ingressHostname]$HOSTNAME"
-          - script: |
-              echo "sourceBranch: $(resources.pipeline.dpp.sourceBranch)"
-              echo "safeNamespace: $(safeNamespace)"
-            displayName: Debug all variables
           - script: |
               kubectl create namespace $(safeNamespace) \
                 --dry-run=client -o yaml | kubectl apply -f -
@@ -60,10 +64,9 @@ stages:
               overrideValues: |
                 frontend.image.tag=$(safeNamespace)-latest
                 backend.image.tag=$(safeNamespace)-latest
-                ingress.baseDomain=$(ingressHostname)
-                backend.configJson=$(BACKEND_CONFIG_JSON)
+                ingress.baseDomain=$(INGRESS_IP)
               valueFile: dpp-chart/values.yaml
 
           - script: |
-              echo "==> Environment URL: https://$(safeNamespace).$(ingressHostname)"
+              echo "==> URL: https://$(safeNamespace).$(INGRESS_IP)"
             displayName: Print environment URL
