@@ -1,7 +1,7 @@
 param clusterName string = 'dpp-aks'
 param location string = resourceGroup().location
 param nodeCount int = 1
-param nodeVmSize string = 'Standard_B2s'
+param nodeVmSize string = 'Standard_B2s_v2'
 
 resource aks 'Microsoft.ContainerService/managedClusters@2026-01-01' = {
   name: clusterName

@@ -16,6 +16,10 @@ parameters:
     displayName: Cluster Name
     type: string
     default: dpp-aks
+  - name: nodeVmSize
+    displayName: Node VM Size
+    type: string
+    default: Standard_B2s_v2
   - name: certEmail
     displayName: Email for Let's Encrypt
     type: string
@@ -48,7 +52,9 @@ stages:
                 az deployment group create \
                   --resource-group ${{ parameters.resourceGroup }} \
                   --template-file infra/main.bicep \
-                  --parameters clusterName=${{ parameters.clusterName }}
+                  --parameters \
+                    clusterName=${{ parameters.clusterName }} \
+                    nodeVmSize=${{ parameters.nodeVmSize }}
 
                 echo "==> Getting credentials..."
                 az aks get-credentials \
