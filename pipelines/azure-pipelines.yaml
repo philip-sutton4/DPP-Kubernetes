@@ -15,10 +15,8 @@ pool:
 
 variables:
   - group: dpp-secrets
-  - name: branchName
-    value: $[ replace(resources.pipeline.dpp.sourceBranch, 'refs/heads/', '') ]
-  - name: safeNamespace
-    value: $[ replace(variables['branchName'], '/', '-') ]
+  - name: safeNamespacee
+    value: $[ replace(replace(resources.pipeline.dpp.sourceBranch, 'refs/heads/', ''), '/', '-') ]
 
 stages:
   - stage: Deploy
