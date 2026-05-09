@@ -16,7 +16,7 @@ pool:
 variables:
   - group: dpp-secrets
   - name: safeNamespacee
-    value: $[ replace(replace(resources.pipeline.dpp.sourceBranch, 'refs/heads/', ''), '/', '-') ]
+    value: $[ replace(replace(variables['resources.pipeline.dpp.sourceBranch'], 'refs/heads/', ''), '/', '-') ]
 
 stages:
   - stage: Deploy
@@ -40,14 +40,8 @@ stages:
 
                 echo "##vso[task.setvariable variable=ingressHostname]$HOSTNAME"
           - script: |
-              echo "==> Pipeline resource variables:"
-              echo "sourceBranch:    $(resources.pipeline.dpp.sourceBranch)"
-              echo "sourceCommit:    $(resources.pipeline.dpp.sourceCommit)"
-              echo "runID:           $(resources.pipeline.dpp.runID)"
-              echo "safeNamespace:   $(safeNamespace)"
-              echo ""
-              echo "==> All variables:"
-              env | sort
+              echo "sourceBranch: $(resources.pipeline.dpp.sourceBranch)"
+              echo "safeNamespace: $(safeNamespace)"
             displayName: Debug all variables
           - script: |
               kubectl create namespace $(safeNamespace) \
