@@ -36,112 +36,142 @@ stages:
       - job: Bootstrap
         timeoutInMinutes: 30
         steps:
-          - task: AzureCLI@2
-            displayName: Create resource group and deploy Bicep
-            inputs:
-              azureSubscription: ${{ parameters.serviceConnection }}
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                echo "==> Creating resource group..."
-                az group create \
-                  --name ${{ parameters.resourceGroup }} \
-                  --location ${{ parameters.location }}
+  - task: AzureCLI@2
+    displayName: Create resource group and deploy Bicep
+    inputs:
+      azureSubscription: ${{ parameters.serviceConnection }}
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        # Resource group creation is already idempotent - safe to rerun
+        az group create \
+          --name ${{ parameters.resourceGroup }} \
+          --location ${{ parameters.location }}
 
-                echo "==> Deploying AKS via Bicep..."
-                az deployment group create \
-                  --resource-group ${{ parameters.resourceGroup }} \
-                  --template-file infra/main.bicep \
-                  --parameters \
-                    clusterName=${{ parameters.clusterName }} \
-                    nodeVmSize=${{ parameters.nodeVmSize }}
+        # Check if cluster already exists before deploying
+        EXISTS=$(az aks show \
+          --resource-group ${{ parameters.resourceGroup }} \
+          --name ${{ parameters.clusterName }} \
+          --query name -o tsv 2>/dev/null)
 
-                echo "==> Getting credentials..."
-                az aks get-credentials \
-                  --resource-group ${{ parameters.resourceGroup }} \
-                  --name ${{ parameters.clusterName }}
+        if [ -z "$EXISTS" ]; then
+          echo "==> Cluster not found, deploying..."
+          az deployment group create \
+            --resource-group ${{ parameters.resourceGroup }} \
+            --template-file infra/main.bicep \
+            --parameters \
+              clusterName=${{ parameters.clusterName }} \
+              nodeVmSize=${{ parameters.nodeVmSize }}
+        else
+          echo "==> Cluster already exists, skipping Bicep deployment."
+        fi
 
-          - task: AzureCLI@2
-            displayName: Install ingress-nginx
-            inputs:
-              azureSubscription: ${{ parameters.serviceConnection }}
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                az aks get-credentials \
-                  --resource-group ${{ parameters.resourceGroup }} \
-                  --name ${{ parameters.clusterName }}
+  - task: AzureCLI@2
+    displayName: Install ingress-nginx
+    inputs:
+      azureSubscription: ${{ parameters.serviceConnection }}
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        az aks get-credentials \
+          --resource-group ${{ parameters.resourceGroup }} \
+          --name ${{ parameters.clusterName }} \
+          --overwrite-existing
 
-                kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+        # Check if ingress-nginx is already installed
+        EXISTS=$(kubectl get deployment ingress-nginx-controller \
+          -n ingress-nginx \
+          --ignore-not-found)
 
-                kubectl wait \
-                  --namespace ingress-nginx \
-                  --for=condition=ready pod \
-                  --selector=app.kubernetes.io/component=controller \
-                  --timeout=90s
+        if [ -z "$EXISTS" ]; then
+          echo "==> Installing ingress-nginx..."
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
 
-                kubectl rollout status deployment ingress-nginx-controller \
-                  -n ingress-nginx
+          kubectl wait \
+            --namespace ingress-nginx \
+            --for=condition=ready pod \
+            --selector=app.kubernetes.io/component=controller \
+            --timeout=90s
 
-          - task: AzureCLI@2
-            displayName: Install cert-manager
-            inputs:
-              azureSubscription: ${{ parameters.serviceConnection }}
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                az aks get-credentials \
-                  --resource-group ${{ parameters.resourceGroup }} \
-                  --name ${{ parameters.clusterName }}
+          kubectl rollout status deployment ingress-nginx-controller \
+            -n ingress-nginx
+        else
+          echo "==> ingress-nginx already installed, skipping."
+        fi
 
-                kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+  - task: AzureCLI@2
+    displayName: Install cert-manager
+    inputs:
+      azureSubscription: ${{ parameters.serviceConnection }}
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        az aks get-credentials \
+          --resource-group ${{ parameters.resourceGroup }} \
+          --name ${{ parameters.clusterName }} \
+          --overwrite-existing
 
-                kubectl wait \
-                  --namespace cert-manager \
-                  --for=condition=ready pod \
-                  --selector=app.kubernetes.io/instance=cert-manager \
-                  --timeout=120s
+        # Check if cert-manager is already installed
+        EXISTS=$(kubectl get deployment cert-manager \
+          -n cert-manager \
+          --ignore-not-found)
 
-          - task: AzureCLI@2
-            displayName: Apply ClusterIssuer
-            inputs:
-              azureSubscription: ${{ parameters.serviceConnection }}
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                az aks get-credentials \
-                  --resource-group ${{ parameters.resourceGroup }} \
-                  --name ${{ parameters.clusterName }}
+        if [ -z "$EXISTS" ]; then
+          echo "==> Installing cert-manager..."
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
 
-                # Inject the email parameter into the ClusterIssuer
-                sed 's/your@email.com/${{ parameters.certEmail }}/' \
-                  cert-manager/cluster-issuer.yaml | kubectl apply -f -
+          kubectl wait \
+            --namespace cert-manager \
+            --for=condition=ready pod \
+            --selector=app.kubernetes.io/instance=cert-manager \
+            --timeout=120s
+        else
+          echo "==> cert-manager already installed, skipping."
+        fi
 
-          - task: AzureCLI@2
-            displayName: Print ingress hostname
-            inputs:
-              azureSubscription: ${{ parameters.serviceConnection }}
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                az aks get-credentials \
-                  --resource-group ${{ parameters.resourceGroup }} \
-                  --name ${{ parameters.clusterName }}
+  - task: AzureCLI@2
+    displayName: Apply ClusterIssuer
+    inputs:
+      azureSubscription: ${{ parameters.serviceConnection }}
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        az aks get-credentials \
+          --resource-group ${{ parameters.resourceGroup }} \
+          --name ${{ parameters.clusterName }} \
+          --overwrite-existing
 
-                echo "==> Waiting for ingress hostname..."
-                until kubectl get svc ingress-nginx-controller \
-                  -n ingress-nginx \
-                  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' \
-                  2>/dev/null | grep -q .; do
-                  echo "Waiting..."
-                  sleep 5
-                done
+        # ClusterIssuer apply is idempotent - safe to rerun
+        sed 's/your@email.com/${{ parameters.certEmail }}/' \
+          cert-manager/cluster-issuer.yaml | kubectl apply -f -
 
-                HOSTNAME=$(kubectl get svc ingress-nginx-controller \
-                  -n ingress-nginx \
-                  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+  - task: AzureCLI@2
+    displayName: Get ingress IP
+    inputs:
+      azureSubscription: ${{ parameters.serviceConnection }}
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        az aks get-credentials \
+          --resource-group ${{ parameters.resourceGroup }} \
+          --name ${{ parameters.clusterName }} \
+          --overwrite-existing
 
-                echo ""
-                echo "==> Bootstrap complete."
-                echo "    Ingress hostname: $HOSTNAME"
-                echo "    Environments will be at: https://<namespace>.$HOSTNAME"
+        echo "==> Waiting for ingress IP..."
+        until kubectl get svc ingress-nginx-controller \
+          -n ingress-nginx \
+          -o jsonpath='{.status.loadBalancer.ingress[0].ip}' \
+          2>/dev/null | grep -q .; do
+          echo "Waiting..."
+          sleep 5
+        done
+
+        IP=$(kubectl get svc ingress-nginx-controller \
+          -n ingress-nginx \
+          -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+        echo ""
+        echo "==> Bootstrap complete."
+        echo "    Ingress IP:      $IP"
+        echo "    Base domain:     $IP.nip.io"
+        echo "    Example URL:     https://main.$IP.nip.io"
