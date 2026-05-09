@@ -39,7 +39,16 @@ stages:
                   -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 
                 echo "##vso[task.setvariable variable=ingressHostname]$HOSTNAME"
-
+          - script: |
+              echo "==> Pipeline resource variables:"
+              echo "sourceBranch:    $(resources.pipeline.dpp.sourceBranch)"
+              echo "sourceCommit:    $(resources.pipeline.dpp.sourceCommit)"
+              echo "runID:           $(resources.pipeline.dpp.runID)"
+              echo "safeNamespace:   $(safeNamespace)"
+              echo ""
+              echo "==> All variables:"
+              env | sort
+            displayName: Debug all variables
           - script: |
               kubectl create namespace $(safeNamespace) \
                 --dry-run=client -o yaml | kubectl apply -f -
