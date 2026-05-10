@@ -43,28 +43,17 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                # Resource group creation is already idempotent - safe to rerun
                 az group create \
                   --name ${{ parameters.resourceGroup }} \
                   --location ${{ parameters.location }}
 
-                # Check if cluster already exists before deploying
-                EXISTS=$(az aks show \
+                echo "==> Deploying Bicep..."
+                az deployment group create \
                   --resource-group ${{ parameters.resourceGroup }} \
-                  --name ${{ parameters.clusterName }} \
-                  --query name -o tsv 2>/dev/null)
-
-                if [ -z "$EXISTS" ]; then
-                  echo "==> Cluster not found, deploying..."
-                  az deployment group create \
-                    --resource-group ${{ parameters.resourceGroup }} \
-                    --template-file infra/main.bicep \
-                    --parameters \
-                      clusterName=${{ parameters.clusterName }} \
-                      nodeVmSize=${{ parameters.nodeVmSize }}
-                else
-                  echo "==> Cluster already exists, skipping Bicep deployment."
-                fi
+                  --template-file infra/main.bicep \
+                  --parameters \
+                    clusterName=${{ parameters.clusterName }} \
+                    nodeVmSize=${{ parameters.nodeVmSize }}
 
           - task: AzureCLI@2
             displayName: Install ingress-nginx
