@@ -3,7 +3,7 @@ trigger: none
 resources:
   pipelines:
     - pipeline: dpp
-      source: dpp-pipeline
+      source: dpp-app-build
       trigger:
         branches:
           include:
