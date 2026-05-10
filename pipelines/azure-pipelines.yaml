@@ -55,6 +55,8 @@ stages:
           - task: HelmDeploy@0
             displayName: Helm upgrade dpp
             inputs:
+              connectionType: Kubernetes Service Connection
+              kubernetesServiceEndpoint: dpp-aks-connection
               command: upgrade
               chartType: filepath
               chartPath: ./dpp-chart
