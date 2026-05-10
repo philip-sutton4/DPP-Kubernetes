@@ -176,7 +176,7 @@ stages:
                 echo "    Base domain:     $IP.nip.io"
                 echo "    Example URL:     https://main.$IP.nip.io"
           - task: AzureCLI@2
-            displayName: Create managed identity and assign roles
+            displayName: Assign AKS role to managed identity
             inputs:
               azureSubscription: ${{ parameters.serviceConnection }}
               scriptType: bash
@@ -184,43 +184,23 @@ stages:
               inlineScript: |
                 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 
-                # Create managed identity if it doesn't exist
-                EXISTS=$(az identity show \
-                  --name dpp-identity \
+                # Get the identity principal ID from the Bicep output
+                IDENTITY_PRINCIPAL_ID=$(az deployment group show \
                   --resource-group ${{ parameters.resourceGroup }} \
-                  --query id -o tsv 2>/dev/null)
+                  --name main \
+                  --query properties.outputs.identityPrincipalId.value -o tsv)
 
-                if [ -z "$EXISTS" ]; then
-                  echo "==> Creating managed identity..."
-                  az identity create \
-                    --name dpp-identity \
-                    --resource-group ${{ parameters.resourceGroup }}
-                else
-                  echo "==> Managed identity already exists, skipping."
-                fi
+                echo "==> Identity principal ID: $IDENTITY_PRINCIPAL_ID"
 
-                IDENTITY_CLIENT_ID=$(az identity show \
-                  --name dpp-identity \
-                  --resource-group ${{ parameters.resourceGroup }} \
-                  --query clientId -o tsv)
-
-                IDENTITY_OBJECT_ID=$(az identity show \
-                  --name dpp-identity \
-                  --resource-group ${{ parameters.resourceGroup }} \
-                  --query principalId -o tsv)
-
-                echo "==> Identity client ID: $IDENTITY_CLIENT_ID"
-
-                # Assign AKS role to the managed identity
                 SCOPE="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/${{ parameters.resourceGroup }}/providers/Microsoft.ContainerService/managedClusters/${{ parameters.clusterName }}"
 
                 az role assignment create \
-                  --assignee $IDENTITY_OBJECT_ID \
+                  --assignee $IDENTITY_PRINCIPAL_ID \
                   --role "Azure Kubernetes Service Cluster User Role" \
                   --scope "$SCOPE" \
                   2>/dev/null && echo "==> Role assigned." || echo "==> Role already exists."
 
-                # Also assign the service connection SP the role to run bootstrap
+                # Assign role to service connection SP as well
                 SP_OBJECT_ID=$(az account show --query user.name -o tsv | \
                   xargs -I{} az ad sp show --id {} --query id -o tsv 2>/dev/null)
 
