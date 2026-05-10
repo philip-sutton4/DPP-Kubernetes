@@ -43,7 +43,7 @@ stages:
               scriptLocation: inlineScript
               inlineScript: |
                 az aks get-credentials \
-                  --resource-group dpp-rg \
+                  --resource-group dpp-ephemeral-dev \
                   --name dpp-aks \
                   --overwrite-existing
 
