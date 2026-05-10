@@ -67,7 +67,6 @@ stages:
                   --name ${{ parameters.clusterName }} \
                   --overwrite-existing
 
-                # Check if ingress-nginx is already installed
                 EXISTS=$(kubectl get deployment ingress-nginx-controller \
                   -n ingress-nginx \
                   --ignore-not-found)
@@ -100,7 +99,6 @@ stages:
                   --name ${{ parameters.clusterName }} \
                   --overwrite-existing
 
-                # Check if cert-manager is already installed
                 EXISTS=$(kubectl get deployment cert-manager \
                   -n cert-manager \
                   --ignore-not-found)
@@ -130,7 +128,6 @@ stages:
                   --name ${{ parameters.clusterName }} \
                   --overwrite-existing
 
-                # ClusterIssuer apply is idempotent - safe to rerun
                 sed 's/your@email.com/${{ parameters.certEmail }}/' \
                   cert-manager/cluster-issuer.yaml | kubectl apply -f -
 
@@ -164,39 +161,3 @@ stages:
                 echo "    Ingress IP:      $IP"
                 echo "    Base domain:     $IP.nip.io"
                 echo "    Example URL:     https://main.$IP.nip.io"
-          - task: AzureCLI@2
-            displayName: Assign AKS role to managed identity
-            inputs:
-              azureSubscription: ${{ parameters.serviceConnection }}
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-
-                # Get the identity principal ID from the Bicep output
-                IDENTITY_PRINCIPAL_ID=$(az deployment group show \
-                  --resource-group ${{ parameters.resourceGroup }} \
-                  --name main \
-                  --query properties.outputs.identityPrincipalId.value -o tsv)
-
-                echo "==> Identity principal ID: $IDENTITY_PRINCIPAL_ID"
-
-                SCOPE="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/${{ parameters.resourceGroup }}/providers/Microsoft.ContainerService/managedClusters/${{ parameters.clusterName }}"
-
-                az role assignment create \
-                  --assignee $IDENTITY_PRINCIPAL_ID \
-                  --role "Azure Kubernetes Service Cluster User Role" \
-                  --scope "$SCOPE" \
-                  2>/dev/null && echo "==> Role assigned." || echo "==> Role already exists."
-
-                # Assign role to service connection SP as well
-                SP_OBJECT_ID=$(az account show --query user.name -o tsv | \
-                  xargs -I{} az ad sp show --id {} --query id -o tsv 2>/dev/null)
-
-                if [ -n "$SP_OBJECT_ID" ]; then
-                  az role assignment create \
-                    --assignee $SP_OBJECT_ID \
-                    --role "Azure Kubernetes Service Cluster User Role" \
-                    --scope "$SCOPE" \
-                    2>/dev/null && echo "==> SP role assigned." || echo "==> SP role already exists."
-                fi
