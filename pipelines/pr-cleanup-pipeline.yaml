@@ -25,7 +25,7 @@ stages:
           - task: AzureCLI@2
             displayName: Get kubeconfig
             inputs:
-              azureSubscription: your-azure-service-connection
+              azureSubscription: azure-ephemeral-dev
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
