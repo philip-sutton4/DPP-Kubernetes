@@ -13,6 +13,8 @@ spec:
       {{- include "dpp-chart.selectorLabels" (dict "component" "backend" "context" .) | nindent 6 }}
   template:
     metadata:
+      annotations:
+        deploymentId: {{ .Values.deploymentId | quote }}
       labels:
         {{- include "dpp-chart.labels" . | nindent 8 }}
         {{- include "dpp-chart.selectorLabels" (dict "component" "backend" "context" .) | nindent 8 }}

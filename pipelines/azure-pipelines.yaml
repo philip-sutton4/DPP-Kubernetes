@@ -15,6 +15,8 @@ pool:
 
 variables:
   - group: dpp-secrets
+  - name: buildId
+    value: $(Build.BuildId)
 
 stages:
   - stage: Deploy
@@ -71,6 +73,7 @@ stages:
                   --set backend.image.tag=$(safeNamespace)-latest \
                   --set ingress.baseDomain=$(INGRESS_IP) \
                   --set backend.configJson=$(BACKEND_CONFIG_JSON) \
+                  --set deploymentId=$(BUILD_ID) \
                   --values dpp-chart/values.yaml
 
                 echo "==> URL: https://$(safeNamespace).$(INGRESS_IP)"
