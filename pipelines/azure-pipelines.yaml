@@ -52,22 +52,33 @@ stages:
                 --dry-run=client -o yaml | kubectl apply -f -
             displayName: Ensure namespace exists
 
-          - task: HelmDeploy@0
+          - task: AzureCLI@2
             displayName: Helm upgrade dpp
             inputs:
-              connectionType: Kubernetes Service Connection
-              kubernetesServiceEndpoint: dpp-aks-connection
-              command: upgrade
-              chartType: filepath
-              chartPath: ./dpp-chart
-              releaseName: dpp-$(safeNamespace)
-              namespace: $(safeNamespace)
-              install: true
-              overrideValues: |
-                frontend.image.tag=$(safeNamespace)-latest
-                backend.image.tag=$(safeNamespace)-latest
-                ingress.baseDomain=$(INGRESS_IP)
-              valueFile: dpp-chart/values.yaml
+              azureSubscription: azure-ephemeral-dev
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az aks get-credentials \
+                  --resource-group dpp-ephemeral-dev \
+                  --name dpp-aks \
+                  --overwrite-existing
+
+                which helm || curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+                helm upgrade dpp-$(safeNamespace) ./dpp-chart \
+                  --namespace $(safeNamespace) \
+                  --install \
+                  --create-namespace \
+                  --set frontend.image.tag=$(safeNamespace)-latest \
+                  --set backend.image.tag=$(safeNamespace)-latest \
+                  --set ingress.baseDomain=$(INGRESS_IP) \
+                  --values dpp-chart/values.yaml
+
+                echo "==> URL: https://$(safeNamespace).$(INGRESS_IP)"
+            env:
+              safeNamespace: $(safeNamespace)
+              INGRESS_IP: $(INGRESS_IP)
 
           - script: |
               echo "==> URL: https://$(safeNamespace).$(INGRESS_IP)"
