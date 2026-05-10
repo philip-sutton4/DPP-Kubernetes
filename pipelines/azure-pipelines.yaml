@@ -36,7 +36,7 @@ stages:
             displayName: Verify namespace variable
 
           - task: AzureCLI@2
-            displayName: Get kubeconfig
+            displayName: Get kubeconfig and ingress IP
             inputs:
               azureSubscription: azure-ephemeral-dev
               scriptType: bash
@@ -47,10 +47,12 @@ stages:
                   --name dpp-aks \
                   --overwrite-existing
 
-          - script: |
-              kubectl create namespace $(safeNamespace) \
-                --dry-run=client -o yaml | kubectl apply -f -
-            displayName: Ensure namespace exists
+                IP=$(kubectl get svc ingress-nginx-controller \
+                  -n ingress-nginx \
+                  -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+                echo "==> Ingress IP: $IP"
+                echo "##vso[task.setvariable variable=INGRESS_IP]$IP.nip.io"
 
           - task: AzureCLI@2
             displayName: Helm upgrade dpp
@@ -59,11 +61,6 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                az aks get-credentials \
-                  --resource-group dpp-ephemeral-dev \
-                  --name dpp-aks \
-                  --overwrite-existing
-
                 which helm || curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
                 helm upgrade dpp-$(safeNamespace) ./dpp-chart \
@@ -79,7 +76,6 @@ stages:
             env:
               safeNamespace: $(safeNamespace)
               INGRESS_IP: $(INGRESS_IP)
-
           - script: |
               echo "==> URL: https://$(safeNamespace).$(INGRESS_IP)"
             displayName: Print environment URL
