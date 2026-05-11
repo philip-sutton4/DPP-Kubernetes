@@ -111,6 +111,9 @@ stages:
             env:
               safeNamespace: $(safeNamespace)
               INGRESS_IP: $(INGRESS_IP)
+              BACKEND_CONFIG_JSON: $(BACKEND_CONFIG_JSON)
+              frontendTag: $(frontendTag)
+              backendTag: $(backendTag)
           - script: |
               echo "==> URL: https://$(safeNamespace).$(INGRESS_IP)"
             displayName: Print environment URL
