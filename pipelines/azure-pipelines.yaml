@@ -95,19 +95,17 @@ stages:
               scriptLocation: inlineScript
               inlineScript: |
                 which helm || curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-
-                helm upgrade dpp-$(safeNamespace) ./dpp-chart \
-                  --namespace $(safeNamespace) \
+                helm upgrade dpp-$safeNamespace ./dpp-chart \
+                  --namespace $safeNamespace \
                   --install \
                   --create-namespace \
-                  --set frontend.image.tag=$(safeNamespace)-latest \
-                  --set backend.image.tag=$(safeNamespace)-latest \
-                  --set ingress.baseDomain=$(INGRESS_IP) \
-                  --set backend.configJson=$(BACKEND_CONFIG_JSON) \
-                  --set deploymentId=$(BUILD_ID) \
+                  --set frontend.image.tag=$frontendTag \
+                  --set backend.image.tag=$backendTag \
+                  --set ingress.baseDomain=$INGRESS_IP \
+                  --set backend.configJson=$BACKEND_CONFIG_JSON \
+                  --set deploymentId=$BUILD_ID \
                   --values dpp-chart/values.yaml
-
-                echo "==> URL: https://$(safeNamespace).$(INGRESS_IP)"
+                echo "==> URL: https://$safeNamespace.$INGRESS_IP"
             env:
               safeNamespace: $(safeNamespace)
               INGRESS_IP: $(INGRESS_IP)
