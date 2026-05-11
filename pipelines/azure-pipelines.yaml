@@ -38,17 +38,28 @@ stages:
             displayName: Verify namespace variable
 
           - script: |
-              FRONTEND_TAG=$(safeNamespace)-latest
-              BACKEND_TAG=$(safeNamespace)-latest
+              SAFE_NS=$(safeNamespace)
 
-              if ! docker manifest inspect philipsutton/dpp-frontend:$FRONTEND_TAG > /dev/null 2>&1; then
-                echo "==> Frontend branch tag not found, using main-latest"
+              TRIGGERED_BY="$(resources.pipeline.dpp.runName)"
+              echo "==> Triggered by run: $TRIGGERED_BY"
+
+              TRIGGER_RUN_ID="$(resources.pipeline.dpp.runID)"
+
+              FRONTEND_TAG=$SAFE_NS-latest
+              BACKEND_TAG=$SAFE_NS-latest
+
+              if ! docker manifest inspect philipsutton/dpp-frontend:$SAFE_NS-$TRIGGER_RUN_ID > /dev/null 2>&1; then
+                echo "==> Frontend not built in this run, using main-latest"
                 FRONTEND_TAG=main-latest
+              else
+                echo "==> Frontend built in this run, using $FRONTEND_TAG"
               fi
 
-              if ! docker manifest inspect philipsutton/dpp-backend:$BACKEND_TAG > /dev/null 2>&1; then
-                echo "==> Backend branch tag not found, using main-latest"
+              if ! docker manifest inspect philipsutton/dpp-backend:$SAFE_NS-$TRIGGER_RUN_ID > /dev/null 2>&1; then
+                echo "==> Backend not built in this run, using main-latest"
                 BACKEND_TAG=main-latest
+              else
+                echo "==> Backend built in this run, using $BACKEND_TAG"
               fi
 
               echo "==> Frontend tag: $FRONTEND_TAG"
