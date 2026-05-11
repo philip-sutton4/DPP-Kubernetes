@@ -13,15 +13,21 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  branchName: $[ replace(resources.pipeline.dpp.sourceBranch, 'refs/heads/', '') ]
-  safeNamespace: $[ replace(variables['branchName'], '/', '-') ]
+  - group: dpp-secrets
 
 stages:
   - stage: Cleanup
-    condition: startsWith(variables['safeNamespace'], 'feature-')
     jobs:
       - job: DeleteNamespace
         steps:
+          - script: |
+              SOURCE_BRANCH="$(resources.pipeline.dpp.sourceBranch)"
+              SAFE_NAMESPACE=$(echo "$SOURCE_BRANCH" | sed 's|refs/heads/||' | sed 's|/|-|g')
+              echo "==> Source branch: $SOURCE_BRANCH"
+              echo "==> Safe namespace: $SAFE_NAMESPACE"
+              echo "##vso[task.setvariable variable=safeNamespace]$SAFE_NAMESPACE"
+            displayName: Compute namespace from branch
+
           - task: AzureCLI@2
             displayName: Get kubeconfig
             inputs:
@@ -31,11 +37,17 @@ stages:
               inlineScript: |
                 az aks get-credentials \
                   --resource-group dpp-ephemeral-dev \
-                  --name dpp-aks
+                  --name dpp-aks \
+                  --overwrite-existing
 
           - script: |
-              helm uninstall dpp-$(safeNamespace) \
-                -n $(safeNamespace) --ignore-not-found
-              kubectl delete namespace $(safeNamespace) \
-                --ignore-not-found=true
+              if [[ "$(safeNamespace)" == feature-* ]]; then
+                echo "==> Deleting namespace: $(safeNamespace)"
+                helm uninstall dpp-$(safeNamespace) \
+                  -n $(safeNamespace) --ignore-not-found
+                kubectl delete namespace $(safeNamespace) \
+                  --ignore-not-found=true
+              else
+                echo "==> Namespace $(safeNamespace) is not a feature namespace, skipping."
+              fi
             displayName: Delete namespace and Helm release
