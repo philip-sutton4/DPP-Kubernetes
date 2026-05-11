@@ -114,6 +114,7 @@ stages:
               BACKEND_CONFIG_JSON: $(BACKEND_CONFIG_JSON)
               frontendTag: $(frontendTag)
               backendTag: $(backendTag)
+              BUILD_ID: $(Build.BuildId)
           - script: |
               echo "==> URL: https://$(safeNamespace).$(INGRESS_IP)"
             displayName: Print environment URL
