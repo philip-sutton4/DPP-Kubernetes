@@ -1,13 +1,12 @@
 trigger: none
 
-resources:
-  pipelines:
-    - pipeline: dpp
-      source: dpp-app-build
-      trigger:
-        branches:
-          include:
-            - main
+schedules:
+  - cron: "0 * * * *"
+    displayName: Hourly namespace cleanup
+    branches:
+      include:
+        - main
+    always: true
 
 pool:
   vmImage: ubuntu-latest
@@ -17,19 +16,13 @@ variables:
 
 stages:
   - stage: Cleanup
+    displayName: Clean stale feature namespaces
     jobs:
-      - job: DeleteNamespace
+      - job: CleanStaleNamespaces
+        timeoutInMinutes: 15
         steps:
-          - script: |
-              SOURCE_BRANCH="$(resources.pipeline.dpp.sourceBranch)"
-              SAFE_NAMESPACE=$(echo "$SOURCE_BRANCH" | sed 's|refs/heads/||' | sed 's|/|-|g')
-              echo "==> Source branch: $SOURCE_BRANCH"
-              echo "==> Safe namespace: $SAFE_NAMESPACE"
-              echo "##vso[task.setvariable variable=safeNamespace]$SAFE_NAMESPACE"
-            displayName: Compute namespace from branch
-
           - task: AzureCLI@2
-            displayName: Get kubeconfig
+            displayName: Delete stale namespaces
             inputs:
               azureSubscription: azure-ephemeral-dev
               scriptType: bash
@@ -40,14 +33,43 @@ stages:
                   --name dpp-aks \
                   --overwrite-existing
 
-          - script: |
-              if [[ "$(safeNamespace)" == feature-* ]]; then
-                echo "==> Deleting namespace: $(safeNamespace)"
-                helm uninstall dpp-$(safeNamespace) \
-                  -n $(safeNamespace) --ignore-not-found
-                kubectl delete namespace $(safeNamespace) \
-                  --ignore-not-found=true
-              else
-                echo "==> Namespace $(safeNamespace) is not a feature namespace, skipping."
-              fi
-            displayName: Delete namespace and Helm release
+                echo "==> Fetching feature namespaces..."
+                NAMESPACES=$(kubectl get namespaces \
+                  -o jsonpath='{.items[*].metadata.name}')
+
+                for ns in $NAMESPACES; do
+                  if [[ $ns != feature-* ]]; then
+                    continue
+                  fi
+
+                  echo "==> Checking namespace: $ns"
+
+                  SUFFIX=${ns#feature-}
+                  BRANCH="feature/$SUFFIX"
+
+                  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                    -H "Accept: application/vnd.github.v3+json" \
+                    "https://api.github.com/repos/philip-sutton4/dpp/branches/$BRANCH")
+
+                  if [ "$HTTP_STATUS" = "404" ]; then
+                    echo "==> Branch '$BRANCH' not found, deleting namespace: $ns"
+
+                    helm uninstall dpp-$ns \
+                      --namespace $ns \
+                      --ignore-not-found \
+                      2>/dev/null \
+                      && echo "==> Helm release uninstalled." \
+                      || echo "==> No Helm release found."
+
+                    kubectl delete namespace $ns --ignore-not-found
+                    echo "==> Namespace $ns deleted."
+
+                  elif [ "$HTTP_STATUS" = "200" ]; then
+                    echo "==> Branch '$BRANCH' still exists, keeping namespace: $ns"
+
+                  else
+                    echo "==> Unexpected HTTP status $HTTP_STATUS for '$BRANCH', skipping."
+                  fi
+                done
+
+                echo "==> Cleanup complete."
