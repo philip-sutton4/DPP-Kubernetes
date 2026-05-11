@@ -37,6 +37,26 @@ stages:
               echo "safeNamespace is: $(safeNamespace)"
             displayName: Verify namespace variable
 
+          - script: |
+              FRONTEND_TAG=$(safeNamespace)-latest
+              BACKEND_TAG=$(safeNamespace)-latest
+
+              if ! docker manifest inspect philipsutton/dpp-frontend:$FRONTEND_TAG > /dev/null 2>&1; then
+                echo "==> Frontend branch tag not found, using main-latest"
+                FRONTEND_TAG=main-latest
+              fi
+
+              if ! docker manifest inspect philipsutton/dpp-backend:$BACKEND_TAG > /dev/null 2>&1; then
+                echo "==> Backend branch tag not found, using main-latest"
+                BACKEND_TAG=main-latest
+              fi
+
+              echo "==> Frontend tag: $FRONTEND_TAG"
+              echo "==> Backend tag: $BACKEND_TAG"
+              echo "##vso[task.setvariable variable=frontendTag]$FRONTEND_TAG"
+              echo "##vso[task.setvariable variable=backendTag]$BACKEND_TAG"
+            displayName: Resolve image tags
+
           - task: AzureCLI@2
             displayName: Get kubeconfig and ingress IP
             inputs:
