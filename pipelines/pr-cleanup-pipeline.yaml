@@ -33,43 +33,21 @@ stages:
                   --name dpp-aks \
                   --overwrite-existing
 
-                echo "==> Fetching feature namespaces..."
-                NAMESPACES=$(kubectl get namespaces \
-                  -o jsonpath='{.items[*].metadata.name}')
+                for ns in $(kubectl get namespaces \
+                  -o jsonpath='{.items[*].metadata.name}'); do
 
-                for ns in $NAMESPACES; do
-                  if [[ $ns != feature-* ]]; then
-                    continue
-                  fi
+                  [[ $ns != feature-* ]] && continue
 
-                  echo "==> Checking namespace: $ns"
-
-                  SUFFIX=${ns#feature-}
-                  BRANCH="feature/$SUFFIX"
+                  BRANCH="feature/${ns#feature-}"
 
                   HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
                     -H "Accept: application/vnd.github.v3+json" \
                     "https://api.github.com/repos/philip-sutton4/dpp/branches/$BRANCH")
 
                   if [ "$HTTP_STATUS" = "404" ]; then
-                    echo "==> Branch '$BRANCH' not found, deleting namespace: $ns"
-
-                    helm uninstall dpp-$ns \
-                      --namespace $ns \
-                      --ignore-not-found \
-                      2>/dev/null \
-                      && echo "==> Helm release uninstalled." \
-                      || echo "==> No Helm release found."
-
+                    helm uninstall dpp-$ns --namespace $ns --ignore-not-found 2>/dev/null
                     kubectl delete namespace $ns --ignore-not-found
-                    echo "==> Namespace $ns deleted."
-
-                  elif [ "$HTTP_STATUS" = "200" ]; then
-                    echo "==> Branch '$BRANCH' still exists, keeping namespace: $ns"
-
-                  else
-                    echo "==> Unexpected HTTP status $HTTP_STATUS for '$BRANCH', skipping."
+                  elif [ "$HTTP_STATUS" != "200" ]; then
+                    echo "Unexpected HTTP $HTTP_STATUS for $BRANCH, skipping."
                   fi
                 done
-
-                echo "==> Cleanup complete."

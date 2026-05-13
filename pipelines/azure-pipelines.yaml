@@ -15,55 +15,32 @@ pool:
 
 variables:
   - group: dpp-secrets
-  - name: buildId
-    value: $(Build.BuildId)
 
 stages:
   - stage: Deploy
-    pool:
-      vmImage: ubuntu-latest
     jobs:
       - job: HelmDeploy
         steps:
           - script: |
               SOURCE_BRANCH="$(resources.pipeline.dpp.sourceBranch)"
               SAFE_NAMESPACE=$(echo "$SOURCE_BRANCH" | sed 's|refs/heads/||' | sed 's|/|-|g')
-              echo "==> Source branch: $SOURCE_BRANCH"
-              echo "==> Safe namespace: $SAFE_NAMESPACE"
               echo "##vso[task.setvariable variable=safeNamespace]$SAFE_NAMESPACE"
             displayName: Compute namespace from branch
 
           - script: |
-              echo "safeNamespace is: $(safeNamespace)"
-            displayName: Verify namespace variable
-
-          - script: |
               SAFE_NS=$(safeNamespace)
-
-              TRIGGERED_BY="$(resources.pipeline.dpp.runName)"
-              echo "==> Triggered by run: $TRIGGERED_BY"
-
               TRIGGER_RUN_ID="$(resources.pipeline.dpp.runID)"
-
               FRONTEND_TAG=$SAFE_NS-latest
               BACKEND_TAG=$SAFE_NS-latest
 
               if ! docker manifest inspect philipsutton/dpp-frontend:$SAFE_NS-$TRIGGER_RUN_ID > /dev/null 2>&1; then
-                echo "==> Frontend not built in this run, using main-latest"
                 FRONTEND_TAG=main-latest
-              else
-                echo "==> Frontend built in this run, using $FRONTEND_TAG"
               fi
 
               if ! docker manifest inspect philipsutton/dpp-backend:$SAFE_NS-$TRIGGER_RUN_ID > /dev/null 2>&1; then
-                echo "==> Backend not built in this run, using main-latest"
                 BACKEND_TAG=main-latest
-              else
-                echo "==> Backend built in this run, using $BACKEND_TAG"
               fi
 
-              echo "==> Frontend tag: $FRONTEND_TAG"
-              echo "==> Backend tag: $BACKEND_TAG"
               echo "##vso[task.setvariable variable=frontendTag]$FRONTEND_TAG"
               echo "##vso[task.setvariable variable=backendTag]$BACKEND_TAG"
             displayName: Resolve image tags
@@ -84,7 +61,6 @@ stages:
                   -n ingress-nginx \
                   -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
-                echo "==> Ingress IP: $IP"
                 echo "##vso[task.setvariable variable=INGRESS_IP]$IP.nip.io"
 
           - task: AzureCLI@2
@@ -95,6 +71,7 @@ stages:
               scriptLocation: inlineScript
               inlineScript: |
                 which helm || curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
                 helm upgrade dpp-$safeNamespace ./dpp-chart \
                   --namespace $safeNamespace \
                   --install \
@@ -103,8 +80,9 @@ stages:
                   --set backend.image.tag=$backendTag \
                   --set ingress.baseDomain=$INGRESS_IP \
                   --set backend.configJson=$BACKEND_CONFIG_JSON \
-                  --set deploymentId=$BUILD_ID \
+                  --set deploymentId=$(Build.BuildId) \
                   --values dpp-chart/values.yaml
+
                 echo "==> URL: https://$safeNamespace.$INGRESS_IP"
             env:
               safeNamespace: $(safeNamespace)
@@ -112,7 +90,3 @@ stages:
               BACKEND_CONFIG_JSON: $(BACKEND_CONFIG_JSON)
               frontendTag: $(frontendTag)
               backendTag: $(backendTag)
-              BUILD_ID: $(Build.BuildId)
-          - script: |
-              echo "==> URL: https://$(safeNamespace).$(INGRESS_IP)"
-            displayName: Print environment URL
