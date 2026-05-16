@@ -1,5 +1,14 @@
 trigger: none
 
+resources:
+  pipelines:
+    - pipeline: dpp
+      source: dpp-app-build
+      trigger:
+        branches:
+          include:
+            - main
+
 schedules:
   - cron: "0 * * * *"
     displayName: Hourly namespace cleanup
@@ -35,14 +44,13 @@ stages:
 
                 for ns in $(kubectl get namespaces \
                   -o jsonpath='{.items[*].metadata.name}'); do
-
                   [[ $ns != feature-* ]] && continue
 
                   BRANCH="feature/${ns#feature-}"
 
                   HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
                     -H "Accept: application/vnd.github.v3+json" \
-                    "https://api.github.com/repos/philip-sutton4/dpp/branches/$BRANCH")
+                    "https://api.github.com/repos/philip-sutton4/DPP-App/branches/$BRANCH")
 
                   if [ "$HTTP_STATUS" = "404" ]; then
                     helm uninstall dpp-$ns --namespace $ns --ignore-not-found 2>/dev/null
