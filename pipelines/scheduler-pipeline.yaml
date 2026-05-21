@@ -15,23 +15,41 @@ schedules:
         - main
     always: true
 
-variables:
-  action: $[ iif(eq(variables['Schedule.DisplayName'], 'Start AKS'), 'start', 'stop') ]
-
 stages:
-  - stage: ToggleAKS
+  - stage: StartAKS
+    displayName: Start AKS cluster
+    condition: eq(variables['Schedule.DisplayName'], 'Start AKS')
     pool:
       vmImage: ubuntu-latest
     jobs:
-      - job: Toggle
+      - job: Start
         steps:
           - task: AzureCLI@2
-            displayName: $(action) AKS cluster
+            displayName: Start AKS cluster
             inputs:
               azureSubscription: azure-ephemeral-dev
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                az aks $(action) \
+                az aks start \
+                  --resource-group dpp-ephemeral-dev \
+                  --name dpp-aks
+
+  - stage: StopAKS
+    displayName: Stop AKS cluster
+    condition: eq(variables['Schedule.DisplayName'], 'Stop AKS')
+    pool:
+      vmImage: ubuntu-latest
+    jobs:
+      - job: Stop
+        steps:
+          - task: AzureCLI@2
+            displayName: Stop AKS cluster
+            inputs:
+              azureSubscription: azure-ephemeral-dev
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az aks stop \
                   --resource-group dpp-ephemeral-dev \
                   --name dpp-aks
