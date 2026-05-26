@@ -1,5 +1,15 @@
 trigger: none
 
+parameters:
+  - name: action
+    displayName: Action (for manual runs)
+    type: string
+    default: none
+    values:
+      - none
+      - start
+      - stop
+
 schedules:
   - cron: "0 7 * * 1-5"
     displayName: Start AKS
@@ -18,7 +28,7 @@ schedules:
 stages:
   - stage: StartAKS
     displayName: Start AKS cluster
-    condition: eq(variables['Schedule.DisplayName'], 'Start AKS')
+    condition: or(eq('${{ parameters.action }}', 'start'), eq(variables['Schedule.DisplayName'], 'Start AKS'))
     pool:
       vmImage: ubuntu-latest
     jobs:
@@ -37,7 +47,8 @@ stages:
 
   - stage: StopAKS
     displayName: Stop AKS cluster
-    condition: eq(variables['Schedule.DisplayName'], 'Stop AKS')
+    dependsOn: []
+    condition: or(eq('${{ parameters.action }}', 'stop'), eq(variables['Schedule.DisplayName'], 'Stop AKS'))
     pool:
       vmImage: ubuntu-latest
     jobs:
