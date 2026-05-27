@@ -1,5 +1,7 @@
 trigger: none
 
+appendCommitMessageToRunName: false
+
 resources:
   pipelines:
     - pipeline: dpp

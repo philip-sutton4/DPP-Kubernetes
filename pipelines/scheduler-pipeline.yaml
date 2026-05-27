@@ -14,25 +14,26 @@ parameters:
 
 schedules:
   - cron: "0 7 * * 1-5"
-    displayName: Start AKS
+    displayName: start
     branches:
       include:
         - main
     always: true
 
   - cron: "0 19 * * 1-5"
-    displayName: Stop AKS
+    displayName: stop
     branches:
       include:
         - main
     always: true
 
+pool:
+  vmImage: ubuntu-latest
+
 stages:
   - stage: StartAKS
     displayName: Start AKS cluster
-    condition: or(eq('${{ parameters.action }}', 'start'), eq(variables['Schedule.DisplayName'], 'Start AKS'))
-    pool:
-      vmImage: ubuntu-latest
+    condition: or(eq('${{ parameters.action }}', 'start'), eq(variables['Build.CronSchedule.DisplayName'], 'start'))
     jobs:
       - job: Start
         steps:
@@ -50,9 +51,7 @@ stages:
   - stage: StopAKS
     displayName: Stop AKS cluster
     dependsOn: []
-    condition: or(eq('${{ parameters.action }}', 'stop'), eq(variables['Schedule.DisplayName'], 'Stop AKS'))
-    pool:
-      vmImage: ubuntu-latest
+    condition: or(eq('${{ parameters.action }}', 'stop'), eq(variables['Build.CronSchedule.DisplayName'], 'stop'))
     jobs:
       - job: Stop
         steps:
