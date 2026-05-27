@@ -1,5 +1,7 @@
 trigger: none
 
+appendCommitMessageToRunName: false
+
 parameters:
   - name: action
     displayName: Action (for manual runs)
